@@ -1,0 +1,48 @@
+name: Build KREEZ for Windows 7
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Get project
+        uses: actions/checkout@v4
+
+      - name: Extract ZIP
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem -Filter *.zip | Select-Object -First 1
+          if (-not $zip) { throw "ZIP file not found" }
+          Expand-Archive -Path $zip.FullName -DestinationPath "project" -Force
+
+      - name: Find project
+        shell: pwsh
+        run: |
+          $pkg = Get-ChildItem -Path project -Filter package.json -Recurse | Select-Object -First 1
+          if (-not $pkg) { throw "package.json not found inside ZIP" }
+          "PROJECT_DIR=$($pkg.Directory.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          cd $env:PROJECT_DIR
+          npm install
+          npm install --save-dev electron@22.3.27 electron-builder@24.13.3
+
+      - name: Build Windows app
+        shell: pwsh
+        run: |
+          cd $env:PROJECT_DIR
+          npx electron-builder --win nsis --ia32 --x64
+
+      - name: Upload EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: KREEZ-Windows
+          path: project/**/dist/*.exe
